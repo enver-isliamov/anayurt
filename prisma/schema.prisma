@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth модели
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
+// Роли пользователей
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+  SUPERADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Дополнительные поля профиля
+  phone         String?
+  telegramId    String?   @unique @map("telegram_id")
+  telegramUsername String? @map("telegram_username")
+  bloodType     String?   @map("blood_type")
+  village       String?
+  bio           String?
+  
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  meetings      MeetingAttendee[]
+  emergencyResponses EmergencyResponse[]
+  
+  @@map("users")
+}
+
+// Встречи сел
+model Meeting {
+  id          String   @id @default(cuid())
+  village     String
+  villageOriginal String? @map("village_original")
+  date        DateTime?
+  dateString  String   @map("date_string")
+  organizer   String
+  location    String
+  description String?  @db.Text
+  fundraisingTitle String? @map("fundraising_title")
+  fundraisingCurrent Int?    @map("fundraising_current")
+  fundraisingTarget  Int?    @map("fundraising_target")
+  status      MeetingStatus @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdBy   String   @map("created_by")
+  
+  attendees   MeetingAttendee[]
+  
+  @@map("meetings")
+}
+
+enum MeetingStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+  PENDING
+}
+
+model MeetingAttendee {
+  id        String   @id @default(cuid())
+  meetingId String   @map("meeting_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([meetingId, userId])
+  @@map("meeting_attendees")
+}
+
+// Срочная помощь (Микро-Ярдым)
+model EmergencyHelp {
+  id          String   @id @default(cuid())
+  type        EmergencyType
+  urgency     UrgencyLevel
+  title       String
+  location    String
+  description String   @db.Text
+  bloodType   String?  @map("blood_type")
+  contactName String?  @map("contact_name")
+  contactPhone String? @map("contact_phone")
+  status      EmergencyStatus @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdBy   String   @map("created_by")
+  
+  responses   EmergencyResponse[]
+  
+  @@map("emergency_helps")
+}
+
+enum EmergencyType {
+  BLOOD
+  MONEY
+  VOLUNTEER
+  OTHER
+}
+
+enum UrgencyLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum EmergencyStatus {
+  ACTIVE
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+model EmergencyResponse {
+  id            String   @id @default(cuid())
+  emergencyId   String   @map("emergency_id")
+  userId        String   @map("user_id")
+  message       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  emergency     EmergencyHelp @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("emergency_responses")
+}
+
+// Крымскотатарские сёла
+model Village {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  originalName String  @map("original_name")
+  district    String
+  population  Int?
+  lat         Float?
+  lng         Float?
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@map("villages")
+}
+
+// События календаря
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  day         String
+  month       String
+  monthNumber Int      @map("month_number")
+  title       String
+  description String   @db.Text
+  category    EventCategory
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@map("calendar_events")
+}
+
+enum EventCategory {
+  RELIGIOUS
+  NATIONAL
+  MEMORIAL
+}
+
+// Обряды
+model Ritual {
+  id          String   @id @default(cuid())
+  name        String
+  originalName String  @map("original_name")
+  category    RitualCategory
+  icon        String
+  description String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  steps       RitualStep[]
+  
+  @@map("rituals")
+}
+
+enum RitualCategory {
+  FUNERAL
+  WEDDING
+  BIRTH
+  OTHER
+}
+
+model RitualStep {
+  id          String   @id @default(cuid())
+  ritualId    String   @map("ritual_id")
+  order       Int
+  title       String
+  description String   @db.Text
+  
+  ritual      Ritual   @relation(fields: [ritualId], references: [id], onDelete: Cascade)
+  
+  @@map("ritual_steps")
+}
+
+// Настройки приложения
+model AppSettings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+  
+  @@map("app_settings")
+}
